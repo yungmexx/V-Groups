@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Group Invite</title>
+      <link rel="stylesheet" href="style.css" />
+   </head>
+   <body>
+      <div class="group-ui">
+         <div class="group-top">
+            <div class="my-profile">
+               <div class="my-avatar">
+                  S
+               </div>
+               <div class="my-info">
+                  <h1>Groups</h1>
+                  <!--  <span>Groups</span> -->
+               </div>
+            </div>
+         </div>
+         <div class="separator"></div>
+         <div class="section">
+            <div class="section-header">
+               <h2>Your Group</h2>
+               <div class="group-subheader">
+                  <p>Players currently in your group</p>
+                  <div class="group-size" id="groupCount">
+                     1 / 4
+                  </div>
+               </div>
+            </div>
+            <div class="group-members" id="groupMembers"></div>
+         </div>
+         <div class="separator"></div>
+         <div class="section">
+            <div class="section-header">
+               <h2>Nearby Players</h2>
+               <p>Invite nearby players to join</p>
+            </div>
+            <div class="players-list" id="playersList"></div>
+         </div>
+      </div>
+      <div class="invite-popup hidden" id="invitePopup">
+         <div class="popup-content">
+            <div class="popup-icon">
+               ✉
+            </div>
+            <h2>Group Invitation</h2>
+            <p id="popupText">
+               Someone invited you to join their group.
+            </p>
+            <div class="popup-buttons">
+               <button class="accept-btn" id="acceptBtn">
+               Accept
+               </button>
+               <button class="decline-btn" id="declineBtn">
+               Decline
+               </button>
+            </div>
+         </div>
+      </div>
+      <script src="script.js"></script>
+   </body>
+</html>
