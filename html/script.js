@@ -35,17 +35,10 @@ function renderGroupMembers() {
             </div>
                 <div class="member-info">
                     <h3>
-                        ${member.id === groupLeaderId
-                            ? `${leaderName}`
-                            : `${member.name}`
-                        } (Player Id: ${member.id})
+                        ${member.id === groupLeaderId ? leaderName : member.name}
                     </h3>
-
                     <span>
-                        ${member.id === groupLeaderId
-                            ? `Group Leader`
-                            : "Group Member"
-                        }
+                        ${member.id === groupLeaderId ? `Group Leader` : "Group Member"} &nbsp;·&nbsp; ID: ${member.id}
                     </span>
                 </div>
             </div>
@@ -130,12 +123,8 @@ function renderNearbyPlayers(players) {
                         <img src="assets/player.png" alt="avatar">
                     </div>
                     <div class="player-info">
-                        <h2>
-                            ${player.name}
-                            (Id: ${player.id})
-                        </h2>
-                        <span>${player.distance}m Away
-                        </span>
+                        <h2>${player.name}</h2>
+                        <span>ID: ${player.id} &nbsp;·&nbsp; ${player.distance}m Away</span>
                     </div>
                 </div>
                 <button class="invite-btn" ${disabled}>
