@@ -2,6 +2,7 @@ local QBCore = exports['qb-core']:GetCoreObject()
 local groups = {}
 local playerGroup = {}
 local invitedPlayers = {}
+local nextGroupId = 1
 
 
 -- Sync Group
@@ -44,13 +45,15 @@ RegisterNetEvent("group:server:invitePlayer", function(targetId)
         targetfullName = tcharinfo.firstname .. " " .. tcharinfo.lastname
     end
     if not playerGroup[src] then
-        playerGroup[src] = src
-        groups[src] = {
+        local newGroupId = nextGroupId
+        nextGroupId = nextGroupId + 1
+        playerGroup[src] = newGroupId
+        groups[newGroupId] = {
             { id = src, name = fullName }
         }
     end
     invitedPlayers[targetId] = "invited"
-    TriggerClientEvent('v-garbage:client:SendNotification', src, 'You have invited '.. targetfullName, 'success', 'bottom', '#141517', '#C1C2C5', 'check', 'green')
+    TriggerClientEvent('v-groups:client:SendNotification', src, 'You have invited '.. targetfullName, 'success', 'bottom', '#141517', '#C1C2C5', 'check', 'green')
     TriggerClientEvent("group:client:receiveInvite", targetId, fullName, playerGroup[src], src)
     TriggerClientEvent("group:client:inviteStatus", src, targetId, "invited")
    -- TriggerClientEvent("group:client:inviteStatus", targetId, src, "invited")
@@ -81,8 +84,8 @@ RegisterNetEvent("group:server:acceptInvite", function(targetId)
         targetfullName = tcharinfo.firstname .. " " .. tcharinfo.lastname
     end
     TriggerClientEvent('groups:client:joinGroup', src, targetId, group)
-    TriggerClientEvent('v-garbage:client:SendNotification', targetId, targetfullName .. ' has joined the group', 'success', 'bottom', '#141517', '#C1C2C5', 'check', 'green')
-    TriggerClientEvent('v-garbage:client:SendNotification', src, 'You have joined the group', 'success', 'bottom', '#141517', '#C1C2C5', 'check', 'green')
+    TriggerClientEvent('v-groups:client:SendNotification', targetId, targetfullName .. ' has joined the group', 'success', 'bottom', '#141517', '#C1C2C5', 'check', 'green')
+    TriggerClientEvent('v-groups:client:SendNotification', src, 'You have joined the group', 'success', 'bottom', '#141517', '#C1C2C5', 'check', 'green')
 end)
 
 -- Decline Invite
@@ -97,7 +100,7 @@ RegisterNetEvent("group:server:declineInvite", function(inviterId)
         local tcharinfo = targetPlayer.PlayerData.charinfo
         targetfullName = tcharinfo.firstname .. " " .. tcharinfo.lastname
     end
-    TriggerClientEvent('v-garbage:client:SendNotification', inviterId, targetfullName .. ' declined invitation', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
+    TriggerClientEvent('v-groups:client:SendNotification', inviterId, targetfullName .. ' declined invitation', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
 end)
 
 -- Set Invite Status
@@ -145,8 +148,8 @@ RegisterNetEvent("group:server:kickPlayer", function(targetId)
     TriggerEvent("group:server:memberRemoved", targetId)
     TriggerClientEvent("group:client:memberRemoved", targetId)
 
-    TriggerClientEvent('v-garbage:client:SendNotification', targetId, fullName .. ' has kicked you from the group', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
-    TriggerClientEvent('v-garbage:client:SendNotification', src, 'You have kicked ' .. targetfullName ..' from the group', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
+    TriggerClientEvent('v-groups:client:SendNotification', targetId, fullName .. ' has kicked you from the group', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
+    TriggerClientEvent('v-groups:client:SendNotification', src, 'You have kicked ' .. targetfullName ..' from the group', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
 end)
 
 -- Leave Group
@@ -156,8 +159,6 @@ RegisterNetEvent("group:server:leaveGroup", function(targetId)
     if not groupId then return end
     local group = groups[groupId]
     if not group then return end
-
-
     for i = #group, 1, -1 do
         if group[i].id == src then
             table.remove(group, i)
@@ -165,8 +166,6 @@ RegisterNetEvent("group:server:leaveGroup", function(targetId)
         end
     end
     playerGroup[src] = nil
-
-
     if #group == 0 then
         groups[groupId] = nil
         return
@@ -198,13 +197,12 @@ RegisterNetEvent("group:server:leaveGroup", function(targetId)
         end
         TriggerClientEvent('group:client:inviteStatus', member.id, targetId, 'invite')
     end
-
     TriggerEvent("group:server:memberRemoved", src)
     TriggerClientEvent("group:client:memberRemoved", src)
     syncGroup(groupId, group)
     TriggerClientEvent("group:client:leftGroup", src)
     invitedPlayers[src] = nil
-    TriggerClientEvent('v-garbage:client:SendNotification', src, 'You have left the group', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
+    TriggerClientEvent('v-groups:client:SendNotification', src, 'You have left the group', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
 end)
 
 -- Request All Names
@@ -237,19 +235,29 @@ end)
 -- Request Group
 RegisterNetEvent("group:server:requestGroup", function()
     local src = source
-    local groupId = playerGroup[src] or src
-    local group = groups[groupId]
+    local groupId = playerGroup[src]
+    local group = groupId and groups[groupId]
+
     if not group or #group == 0 then
-        group = {
-            { id = src, name = GetPlayerName(src) or "Unknown" }
-        }
+        local Player = QBCore.Functions.GetPlayer(src)
+        local name = "Unknown"
+        if Player then
+            local c = Player.PlayerData.charinfo
+            name = (c.firstname or "Unknown") .. " " .. (c.lastname or "")
+        else
+            name = GetPlayerName(src) or "Unknown"
+        end
+        -- only allocate a new sequential ID if this player has never had one
+        if not groupId then
+            groupId = nextGroupId
+            nextGroupId = nextGroupId + 1
+            playerGroup[src] = groupId
+        end
+        group = { { id = src, name = name } }
         groups[groupId] = group
-        playerGroup[src] = groupId
     end
+
     local leaderId = group[1] and group[1].id
-    for _, v in ipairs(group) do
-        playerGroup[v.id] = groupId
-    end
     local Player = QBCore.Functions.GetPlayer(leaderId)
     local leaderName = "Unknown"
     if Player then
@@ -383,6 +391,15 @@ AddEventHandler('playerDropped', function(reason)
     end
 end)
 
+
+
+
+--  ███████╗██╗░░██╗██████╗░░█████╗░██████╗░████████╗░██████╗
+--  ██╔════╝╚██╗██╔╝██╔══██╗██╔══██╗██╔══██╗╚══██╔══╝██╔════╝
+--  █████╗░░░╚███╔╝░██████╔╝██║░░██║██████╔╝░░░██║░░░╚█████╗░
+--  ██╔══╝░░░██╔██╗░██╔═══╝░██║░░██║██╔══██╗░░░██║░░░░╚═══██╗
+--  ███████╗██╔╝╚██╗██║░░░░░╚█████╔╝██║░░██║░░░██║░░░██████╔╝
+--  ╚══════╝╚═╝░░╚═╝╚═╝░░░░░░╚════╝░╚═╝░░╚═╝ ░ ░╚═╝ ░ ░╚═════╝ ░
 
 -- Get all groups
 exports('GetGroups', function()
