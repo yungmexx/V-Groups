@@ -39,7 +39,6 @@ local function updateNearbyPlayers()
             if distance <= 10.0 then
                 local serverId = GetPlayerServerId(player)
                 if not isInGroup(serverId) then
-                  --  print(playerStatus[serverId])
                     local inviteState = playerStatus[serverId] or "invite"
                     if not playerNames[serverId] then
                         TriggerServerEvent("group:server:getNearbyName", serverId)
@@ -92,6 +91,7 @@ local function toggleGroupUi(state)
         end
     end)
     if isUiOpen then
+        playerStatus = {}
         TriggerServerEvent("group:server:requestAllNames")
         TriggerServerEvent("group:server:requestGroup")
         SendNUIMessage({
@@ -323,30 +323,7 @@ CreateThread(function()
     end
 end)
 
---[[
-CreateThread(function()
-    while true do
-        Wait(5000) -- every 5 seconds
-        if #groupMembers == 0 then
-            print("No group members")
-        else
-            print("Leader ID:", currentLeaderId or "None")
-            print("Leader Name:", currentLeaderName or "None")
 
-            for i, member in ipairs(groupMembers) do
-                print(("[Member %s] ID: %s | Name: %s | Leader: %s")
-                    :format(
-                        i,
-                        member.id or "nil",
-                        member.name or "Unknown",
-                        tostring(member.leader)
-                    )
-                )
-            end
-        end
-    end
-end)
---]]
 CreateThread(function()
     Wait(1000)
     TriggerServerEvent("group:server:requestGroup")
@@ -355,9 +332,6 @@ CreateThread(function()
         id = GetPlayerServerId(PlayerId())
     })
 end)
-
-
-
 
 AddEventHandler('QBCore:Client:OnPlayerLoaded', function()
     Wait(1000)
@@ -369,6 +343,7 @@ RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
     currentGroupId = nil
     currentLeaderId = nil
     currentLeaderName = nil
+    playerStatus = {}
 
     SendNUIMessage({
         action = "setGroupMembers",
@@ -389,7 +364,6 @@ end)
 RegisterCommand("group", function()
     toggleGroupUi(true)
 end)
-
 
 
 --  ███████╗██╗░░██╗██████╗░░█████╗░██████╗░████████╗░██████╗
