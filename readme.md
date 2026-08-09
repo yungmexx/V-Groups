@@ -6,9 +6,7 @@ A lightweight group script. Players can invite anyone standing nearby into a gro
 
 
 ## Requirements
-
-- [qb-core](https://github.com/qbcore-framework/qb-core)
-- One of `qb`, `ox_lib`, or the built-in GTA notification, depending on what you set in the config (see below)
+- NONE
 
 That's it — no target resource, no extra libraries are required for the group system itself.
 
