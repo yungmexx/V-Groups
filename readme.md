@@ -2,6 +2,9 @@
 
 A lightweight group script. Players can invite anyone standing nearby into a group, see who's in it, hand off leadership automatically, and kick or leave whenever they want — all through a clean NUI panel instead of chat commands. It's built to be dropped into other jobs (like a garbage or delivery job) that lets players work as a team.
 
+<img width="404" height="453" alt="f9c927281428cc00304c37449f75451e5c09e50d" src="https://github.com/user-attachments/assets/7f499572-46af-4b4c-87ea-9b76a5a57f5f" />
+
+
 ## Requirements
 
 - [qb-core](https://github.com/qbcore-framework/qb-core)
