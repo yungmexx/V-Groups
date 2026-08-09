@@ -1,4 +1,3 @@
-local QBCore = exports['qb-core']:GetCoreObject()
 local isUiOpen = false
 local nearbyPlayers = {}
 local nearbyCache = {}
