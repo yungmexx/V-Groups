@@ -195,7 +195,7 @@ RegisterNUICallback("declineInvite", function(data, cb)
             "group:server:declineInvite",
             currentInviterId
         )
-        TriggerEvent('v-garbage:client:SendNotification', 'You have declined the invite', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
+        TriggerEvent('v-groups:client:SendNotification', 'You have declined the invite', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
     end
 
     SendNUIMessage({
@@ -237,7 +237,7 @@ RegisterNetEvent("group:client:receiveInvite", function(fromName, groupId, invit
         groupId = groupId
     })
 
-    TriggerEvent('v-garbage:client:SendNotification', 'You have received an invite', 'success', 'bottom', '#141517', '#C1C2C5', 'check', 'green')
+    TriggerEvent('v-groups:client:SendNotification', 'You have received an invite', 'success', 'bottom', '#141517', '#C1C2C5', 'check', 'green')
 end)
 
 
@@ -362,8 +362,8 @@ end)
 
 
 
-RegisterNetEvent("v-garbage:client:SendNotification")
-AddEventHandler("v-garbage:client:SendNotification", function(description, type, position, backgroundColor, color, icon, iconColor)
+RegisterNetEvent("v-groups:client:SendNotification")
+AddEventHandler("v-groups:client:SendNotification", function(description, type, position, backgroundColor, color, icon, iconColor)
     SendNotification(description, type, position, backgroundColor, color, icon, iconColor)
 end)
 
