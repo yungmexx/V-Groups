@@ -1,12 +1,19 @@
+local QBCore = exports['qb-core']:GetCoreObject()
 local isUiOpen = false
 local nearbyPlayers = {}
+local nearbyCache = {}
+local activeIds = {}
 local groupMembers = {}
 local playerNames = {}
 local currentLeaderId = nil
+
+
 local currentLeaderName = nil
 local playerStatus = {}
 local currentInviterId = nil
 local currentGroupId = nil
+local cursorActive = true
+
 
 
 --  ███████╗██╗░░░██╗███╗░░██╗░█████╗░████████╗██╗░█████╗░███╗░░██╗
@@ -16,6 +23,20 @@ local currentGroupId = nil
 --  ██║░░░░░╚██████╔╝██║░╚███║╚█████╔╝░░░██║░░░██║╚█████╔╝██║░╚███║
 --  ╚═╝░░░░░░╚═════╝░╚═╝░░╚══╝░╚════╝░░░░╚═╝░░░╚═╝░╚════╝░╚═╝░░╚══╝
 
+local function DrawText3D(x, y, z, text)
+    local onScreen, _x, _y = World3dToScreen2d(x, y, z)
+    if onScreen then
+        SetTextEntry("STRING")
+        AddTextComponentString(text)
+        SetTextScale(0.55, 0.55)
+        SetTextFont(4)
+        SetTextProportional(1)
+        SetTextColour(255, 255, 255, 255)
+        SetTextOutline()
+        SetTextCentre(true)
+        DrawText(_x, _y)
+    end
+end
 
 local function isInGroup(playerId)
     for _, member in pairs(groupMembers) do
@@ -27,17 +48,28 @@ local function isInGroup(playerId)
 end
 
 
+local function clearTable(t)
+    for k in pairs(t) do
+        t[k] = nil
+    end
+end
+
 local function updateNearbyPlayers()
-    nearbyPlayers = {}
+    clearTable(nearbyPlayers)
+    clearTable(nearbyCache)
+    clearTable(activeIds)
     local myPed = PlayerPedId()
     local myCoords = GetEntityCoords(myPed)
     for _, player in ipairs(GetActivePlayers()) do
+        local serverId = GetPlayerServerId(player)
+        activeIds[serverId] = true
         local targetPed = GetPlayerPed(player)
         if targetPed ~= myPed then
             local coords = GetEntityCoords(targetPed)
-            local distance = #(myCoords - coords)
-            if distance <= 10.0 then
-                local serverId = GetPlayerServerId(player)
+            local dx, dy, dz = coords.x - myCoords.x, coords.y - myCoords.y, coords.z - myCoords.z
+            local distSq = dx * dx + dy * dy + dz * dz
+            if distSq <= 100.0 then
+                nearbyCache[#nearbyCache + 1] = { ped = targetPed, id = serverId }
                 if not isInGroup(serverId) then
                     local inviteState = playerStatus[serverId] or "invite"
                     if not playerNames[serverId] then
@@ -47,7 +79,7 @@ local function updateNearbyPlayers()
                     local data = {
                         id = serverId,
                         name = name or "Unknown",
-                        distance = math.floor(distance * 10) / 10,
+                        distance = math.floor(math.sqrt(distSq) * 10) / 10,
                         status = inviteState or nil
                     }
                     table.insert(nearbyPlayers, data)
@@ -55,44 +87,29 @@ local function updateNearbyPlayers()
             end
         end
     end
+
+    for id in pairs(playerNames) do
+        if not activeIds[id] then playerNames[id] = nil end
+    end
+    for id in pairs(playerStatus) do
+        if not activeIds[id] then playerStatus[id] = nil end
+    end
+
     SendNUIMessage({
         action = "setNearbyPlayers",
         players = nearbyPlayers
     })
 end
 
-local function toggleGroupUi(state)
-    if state ~= nil then
-        isUiOpen = state
-    else
-        isUiOpen = not isUiOpen
-    end
+local function toggleGroup()
+    isUiOpen = not isUiOpen
+    cursorActive = true
     SetNuiFocus(isUiOpen, isUiOpen)
     SendNUIMessage({
         action = "toggle",
         state = isUiOpen
     })
-    CreateThread(function()
-        while isUiOpen do
-            local myPed = PlayerPedId()
-            local myCoords = GetEntityCoords(myPed)
-            for _, player in ipairs(GetActivePlayers()) do
-                local ped = GetPlayerPed(player)
-                if ped ~= myPed then
-                    local coords = GetEntityCoords(ped)
-                    local distance = #(myCoords - coords)
-                    if distance <= 10.0 then
-                        local serverId = GetPlayerServerId(player)
-                        DrawText3D(coords.x, coords.y, coords.z + 1.0, tostring(serverId))
-                    end
-                end
-            end
-            Wait(0)
-        end
-    end)
     if isUiOpen then
-        playerStatus = {}
-        TriggerServerEvent("group:server:requestAllNames")
         TriggerServerEvent("group:server:requestGroup")
         SendNUIMessage({
             action = "setMyId",
@@ -100,7 +117,14 @@ local function toggleGroupUi(state)
         })
         Wait(100)
         updateNearbyPlayers()
+    else
+        collectgarbage("collect")
     end
+end
+
+
+local function resetInvites()
+    playerStatus = {}
 end
 
 
@@ -114,17 +138,32 @@ end
 
 RegisterNUICallback("close", function(_, cb)
     isUiOpen = false
+    cursorActive = true
     SetNuiFocus(false, false)
     SendNUIMessage({
         action = "toggle",
         state = false
     })
+    collectgarbage("collect")
+    cb("ok")
+end)
+
+RegisterNUICallback("toggleMouse", function(_, cb)
+    if isUiOpen then
+        cursorActive = not cursorActive
+        SetNuiFocus(true, cursorActive)
+    end
     cb("ok")
 end)
 
 RegisterNUICallback("invitePlayer", function(data, cb)
     local playerId = data.playerId
-    TriggerServerEvent("group:server:invitePlayer", playerId)
+
+    TriggerServerEvent(
+        "group:server:invitePlayer",
+        playerId
+    )
+
     cb("ok")
 end)
 
@@ -133,10 +172,16 @@ RegisterNUICallback("acceptInvite", function(data, cb)
     if not isUiOpen then
         SetNuiFocus(false, false)
     end
-    TriggerServerEvent("group:server:acceptInvite", data.groupId)
+
+    TriggerServerEvent(
+        "group:server:acceptInvite",
+        data.groupId
+    )
+
     SendNUIMessage({
         action = "hideInvite"
     })
+
     cb("ok")
 end)
 
@@ -145,24 +190,26 @@ RegisterNUICallback("declineInvite", function(data, cb)
     if not isUiOpen then
         SetNuiFocus(false, false)
     end
+
     if currentInviterId then
         TriggerServerEvent(
             "group:server:declineInvite",
             currentInviterId
         )
+        TriggerEvent('v-garbage:client:SendNotification', 'You have declined the invite', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
     end
+
     SendNUIMessage({
         action = "hideInvite"
     })
-    
+
     currentInviteGroup = nil
     currentInviterId = nil
-    TriggerEvent('v-garbage:client:SendNotification', 'You have declined the invite', 'error', 'bottom', '#141517', '#C1C2C5', 'x', 'red')
     cb("ok")
 end)
 
 RegisterNUICallback("leaveGroup", function(data, cb)
-    TriggerServerEvent("group:server:leaveGroup", data.playerId)
+    TriggerServerEvent("group:server:leaveGroup")
     cb("ok")
 end)
 
@@ -182,18 +229,21 @@ end)
 RegisterNetEvent("group:client:receiveInvite", function(fromName, groupId, inviterId)
     currentInviteGroup = groupId
     currentInviterId = inviterId
+
     SetNuiFocus(true, true)
+
     SendNUIMessage({
         action = "showInvite",
         fromName = fromName,
         groupId = groupId
     })
+
     TriggerEvent('v-garbage:client:SendNotification', 'You have received an invite', 'success', 'bottom', '#141517', '#C1C2C5', 'check', 'green')
 end)
 
 
 RegisterNetEvent("group:client:updateGroup")
-AddEventHandler("group:client:updateGroup", function(groupId, groupData, leaderId, leaderName)
+AddEventHandler("group:client:updateGroup", function(groupData, leaderId, leaderName, maxSize, groupId)
     local myId = GetPlayerServerId(PlayerId())
     if not leaderId then
         leaderId = myId
@@ -202,19 +252,18 @@ AddEventHandler("group:client:updateGroup", function(groupId, groupData, leaderI
     groupMembers = groupData or {}
     currentLeaderId = leaderId
     currentLeaderName = leaderName
-    currentGroupId = groupId
+    currentGroupId = groupId or currentGroupId
     SendNUIMessage({
         action = "setGroupMembers",
         members = groupMembers,
         leader = currentLeaderId,
-        leaderName = currentLeaderName
+        leaderName = currentLeaderName,
+        maxSize = maxSize
     })
     updateNearbyPlayers()
 end)
 
 RegisterNetEvent("group:client:inviteStatus", function(playerId, status)
-    print(playerStatus[playerId])
-    print(status)
     if not status then
         playerStatus[playerId] = nil
     else
@@ -224,18 +273,18 @@ RegisterNetEvent("group:client:inviteStatus", function(playerId, status)
 end)
 
 RegisterNetEvent("group:client:leftGroup", function()
+    resetInvites()
     groupMembers = {}
     groupLeaderId = nil
     currentLeaderId = nil
     currentLeaderName = nil
+    currentGroupId = nil
     SendNUIMessage({
         action = "setGroupMembers",
         members = {},
         leader = nil,
         leaderName = nil
     })
-    currentGroupId = nil
-    TriggerServerEvent("group:server:requestAllNames")
     TriggerServerEvent("group:server:requestGroup")
     SendNUIMessage({
         action = "setMyId",
@@ -250,19 +299,20 @@ RegisterNetEvent("group:client:receiveNearbyName", function(playerId, name)
     playerNames[playerId] = name
 end)
 
+
 RegisterNetEvent("group:client:kicked", function()
+    resetInvites()
     groupMembers = {}
     groupLeaderId = nil
     currentLeaderId = nil
     currentLeaderName = nil
+    currentGroupId = nil
     SendNUIMessage({
         action = "setGroupMembers",
         members = {},
         leader = nil,
         leaderName = nil
     })
-    currentGroupId = nil
-    TriggerServerEvent("group:server:requestAllNames")
     TriggerServerEvent("group:server:requestGroup")
     SendNUIMessage({
         action = "setMyId",
@@ -271,13 +321,6 @@ RegisterNetEvent("group:client:kicked", function()
     Wait(100)
     updateNearbyPlayers()
 end)
-
-
-RegisterNetEvent("group:client:receiveAllNames", function(data)
-    playerNames = data
-end)
-
-
 
 
 
@@ -293,9 +336,9 @@ CreateThread(function()
     while true do
         if isUiOpen then
             updateNearbyPlayers()
-            Wait(500)
-        else
             Wait(1000)
+        else
+            Wait(500)
         end
     end
 end)
@@ -303,16 +346,11 @@ end)
 CreateThread(function()
     while true do
         if isUiOpen then
-            local myPed = PlayerPedId()
-            local myCoords = GetEntityCoords(myPed)
-            for _, player in ipairs(GetActivePlayers()) do
-                local ped = GetPlayerPed(player)
-                if ped ~= myPed then
-                    local coords = GetEntityCoords(ped)
-                    local distance = #(myCoords - coords)
-                    if distance <= 10.0 then
-                        local serverId = GetPlayerServerId(player)
-                        DrawText3D(coords.x, coords.y, coords.z + 1.0, tostring(serverId))
+            if #nearbyCache > 0 then
+                for _, entry in ipairs(nearbyCache) do
+                    if DoesEntityExist(entry.ped) then
+                        local coords = GetEntityCoords(entry.ped)
+                        DrawText3D(coords.x, coords.y, coords.z + 1.0, tostring(entry.id))
                     end
                 end
             end
@@ -324,33 +362,10 @@ CreateThread(function()
 end)
 
 
-CreateThread(function()
-    Wait(1000)
-    TriggerServerEvent("group:server:requestGroup")
-    SendNUIMessage({
-        action = "setMyId",
-        id = GetPlayerServerId(PlayerId())
-    })
-end)
 
-AddEventHandler('QBCore:Client:OnPlayerLoaded', function()
-    Wait(1000)
-    TriggerServerEvent("group:server:requestGroup")
-end)
-
-RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
-    groupMembers = {}
-    currentGroupId = nil
-    currentLeaderId = nil
-    currentLeaderName = nil
-    playerStatus = {}
-
-    SendNUIMessage({
-        action = "setGroupMembers",
-        members = {},
-        leader = nil,
-        leaderName = nil
-    })
+RegisterNetEvent("v-garbage:client:SendNotification")
+AddEventHandler("v-garbage:client:SendNotification", function(description, type, position, backgroundColor, color, icon, iconColor)
+    SendNotification(description, type, position, backgroundColor, color, icon, iconColor)
 end)
 
 
@@ -361,20 +376,8 @@ end)
 --  ╚█████╔╝╚█████╔╝██║░╚═╝░██║██║░╚═╝░██║██║░░██║██║░╚███║██████╔╝
 --  ░╚════╝░░╚════╝░╚═╝░░░░░╚═╝╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═╝░░╚══╝╚═════╝░
 
-RegisterCommand("group", function()
-    toggleGroupUi(true)
-end)
-
-
---  ███████╗██╗░░██╗██████╗░░█████╗░██████╗░████████╗░██████╗
---  ██╔════╝╚██╗██╔╝██╔══██╗██╔══██╗██╔══██╗╚══██╔══╝██╔════╝
---  █████╗░░░╚███╔╝░██████╔╝██║░░██║██████╔╝░░░██║░░░╚█████╗░
---  ██╔══╝░░░██╔██╗░██╔═══╝░██║░░██║██╔══██╗░░░██║░░░░╚═══██╗
---  ███████╗██╔╝╚██╗██║░░░░░╚█████╔╝██║░░██║░░░██║░░░██████╔╝
---  ╚══════╝╚═╝░░╚═╝╚═╝░░░░░░╚════╝░╚═╝░░╚═╝░░░╚═╝░░░╚═════╝░
-
-exports('GetGroupID', function()
-    return currentGroupId
+RegisterCommand("groups", function()
+    toggleGroup()
 end)
 
 
@@ -391,6 +394,11 @@ end)
 -- Get leader name
 exports('GetGroupLeaderName', function()
     return currentLeaderName
+end)
+
+-- Get the current group's unique id
+exports('GetGroupID', function()
+    return currentGroupId
 end)
 
 -- Check if local player is leader
@@ -423,10 +431,48 @@ exports('IsGroupUiOpen', function()
     return isUiOpen
 end)
 
-
 -- Open/close group UI
-exports('OpenGroup', function(state)
-    toggleGroupUi(state)
+exports('ToggleGroupUi', function(state)
+    if state ~= nil then
+        isUiOpen = state
+    else
+        isUiOpen = not isUiOpen
+    end
+
+    cursorActive = true
+    SetNuiFocus(isUiOpen, isUiOpen)
+
+    SendNUIMessage({
+        action = "toggle",
+        state = isUiOpen
+    })
+
+    if isUiOpen then
+        TriggerServerEvent("group:server:requestGroup")
+
+        SendNUIMessage({
+            action = "setMyId",
+            id = GetPlayerServerId(PlayerId())
+        })
+
+        Wait(100)
+
+        updateNearbyPlayers()
+    else
+        collectgarbage("collect")
+    end
+end)
+
+-- Force refresh nearby players
+exports('RefreshNearbyPlayers', function()
+    updateNearbyPlayers()
+end)
+
+-- Open the group UI (no-op if already open)
+exports('OpenGroup', function()
+    if not isUiOpen then
+        toggleGroup()
+    end
 end)
 
 -- Get my current group data
