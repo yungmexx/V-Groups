@@ -8,7 +8,6 @@ A lightweight group script. Players can invite anyone standing nearby into a gro
 ## Requirements
 - NONE
 
-That's it — no target resource, no extra libraries are required for the group system itself.
 
 ## Installation
 
